@@ -9,12 +9,14 @@ from BoundaryGenerator import PolarData as pol
 import matplotlib.pyplot as plt
 from GridCreator import ShortestPath as sp
 
+np.set_printoptions(precision=3, suppress=True)
+
 loc = r'C:\Users\UKOGH001\Documents\05 Personal Projects\02 Vendee\02 Routing\Polars'
 polars = pol.Polars(loc).readfiles()
 #pp.polarplt(polars[1], [1])
 
 grdbuild = gs.GridStep(p.start, p.end, p.bound)
-grid = grdbuild.GraphBuild(1, 40, 30, 1)
+grid = grdbuild.GraphBuild(0.5, 90, 90, 1)
 
 x = grid['x'].to_numpy()
 y = grid['y'].to_numpy()
@@ -26,6 +28,6 @@ vert = sp.Shortpath(grid, polars, Wind.wind, p.res)
 sol = vert.Dijkstra()
 path = vert.Path(sol[1])
 print("Total Time: " + str(sol[0][-1]))
+print(sol[3][path], sol[4][path])
 
-
-wv.WindVec(Wind.u, Wind.v, Wind.X, Wind.Y, x, y, path, sol[2][path], polars[0], True)
+wv.WindVec(Wind.u, Wind.v, Wind.X, Wind.Y, x, y, path, sol[2][path], polars[0], False)

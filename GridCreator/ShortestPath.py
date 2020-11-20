@@ -26,14 +26,14 @@ class Shortpath:
             pol = inx
         return pol, y1, y2
 
-    def timetravel(self, p1, p2, row):
+    def timetravel(self, p1, p2, row, orig):
         dist = np.sqrt((p1[0] - p2[0]) ** 2 + (p1[1] - p2[1]) ** 2)
         if (p2[0] - p1[0]) == 0:
             theta = np.pi / 2 if (p2[1] - p1[1]) > 0 else 3 * np.pi / 2
         elif (p2[1] - p1[1]) == 0:
             theta = 0 if (p2[0] - p1[0]) > 0 else np.pi
         else:
-            theta = (2 * np.pi - np.arctan((p2[1] - p1[1]) / (p2[0] - p1[0]))) % (2 * np.pi) if (p2[0] - p1[0])>0 else np.arctan((p2[1] - p1[1]) / (p2[0] - p1[0]))
+            theta = (2 * np.pi - np.arctan((p2[1] - p1[1]) / (p2[0] - p1[0]))) % (2 * np.pi) if (p2[0] - p1[0])>0 else np.pi - np.arctan((p2[1] - p1[1]) / (p2[0] - p1[0]))
 
         x, y = int(p1[0] / self.res[0]), int(p1[1] / self.res[1])
 
@@ -47,23 +47,21 @@ class Shortpath:
             elif u == 0:
                 t_w = np.pi / 2 if v > 0 else 3 * np.pi / 2
             else:
-                t_w = np.pi - np.arctan(v / u) if u > 0 else (2 * np.pi -  np.arctan(v / u)) % (2 * np.pi)
+                t_w = np.pi - np.arctan(v / u) if u > 0 else (2 * np.pi - np.arctan(v / u)) % (2 * np.pi)
 
             s_w = int(np.sqrt(u ** 2 + v ** 2))
-
             t_ab = (t_w - theta) * self.conv % self.dircount
 
             pol, y1, y2 = self.bestpolar(s_w, t_ab)
-
             x1, x2 = math.floor(t_ab), math.ceil(t_ab)
-            print(row, pol, t_ab % 180)
+
             if x1 == x2:
                 speed = y1
             else:
                 coef = np.polyfit([x1, x2], [y1, y2], 1)
                 speed = coef[0] * t_ab + coef[1]
             time = dist / speed if speed > 0 else np.inf
-        return time, pol
+        return time, pol, [t_ab, t_w * self.conv, theta * self.conv], s_w
 
     def Dijkstra(self):
         #input graph, outputs pandas df with list of vertices and times for all points
@@ -72,6 +70,8 @@ class Shortpath:
         dist = np.inf * np.ones(vertices)
         sail = np.zeros(vertices)
         pred = np.zeros(vertices)
+        wind_speed = np.zeros(vertices)
+        angle = np.zeros((vertices, 3))
         vert = [x for x in range(0, vertices)]
 
         #fist element
@@ -82,6 +82,7 @@ class Shortpath:
             inx_temp = np.argmin(dist[vert])
             inx = np.arange(dist.shape[0])[vert][inx_temp]
             vert.remove(inx)
+            #print(dist, inx)
 
             band = self.graph.at[inx, 'Band']
             x1, y1 = self.graph.at[inx, 'x'], self.graph.at[inx, 'y']
@@ -89,14 +90,16 @@ class Shortpath:
                 id = row[2]
                 if id in vert:
                     x2, y2 = row[3], row[4]
-                    timesail = self.timetravel([x1, y1], [x2, y2], row)
+                    timesail = self.timetravel([x1, y1], [x2, y2], row, band)
                     md = dist[inx] + timesail[0]
                     if md < dist[id]:
                         sail[id] = timesail[1]
+                        angle[id, :] = timesail[2]
+                        wind_speed[id] = timesail[3]
                         dist[id] = md
                         pred[id] = inx
 
-        return dist, pred, sail
+        return dist, pred, sail, angle, wind_speed
 
     def Path(self, sol):
         x = np.inf

@@ -15,8 +15,8 @@ def legend_without_duplicate_labels(ax):
 
 def WindVec(u, v, x, y, xx, yy, path, col, sail, bool):
     fig1, ax1 = plt.subplots()
-    M = np.hypot(u, v) / 100
-    Q = ax1.quiver(x, y, u/5, v/5, M, pivot='tip', width=0.002, scale=1/0.15)
+    M = np.hypot(u, v) / 500
+    Q = ax1.quiver(x, y, u/5, v/5, M, pivot='tip', width=0.002, scale=1/0.015)
     if bool:
         T = ax1.scatter(xx, yy)
     clr = SailType(col)[1:]
