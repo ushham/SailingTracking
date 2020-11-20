@@ -56,6 +56,7 @@ class Shortpath:
             pol, y1, y2 = self.bestpolar(s_w, t_ab)
 
             x1, x2 = math.floor(t_ab), math.ceil(t_ab)
+            print(row, pol, t_ab % 180)
             if x1 == x2:
                 speed = y1
             else:
@@ -75,7 +76,6 @@ class Shortpath:
 
         #fist element
         dist[0] = 0
-
 
         while len(vert) > 0:
             #find vertex in dist with min time
