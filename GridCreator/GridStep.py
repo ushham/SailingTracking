@@ -6,6 +6,7 @@ class GridStep:
     minSpacing = 11
     conv = 2 * np.pi / 360
     cols = ['Band', 'ID', 'x', 'y']
+    dist = np.array([0.1, 0.2, 0.3])
 
     def __init__(self, start, end, bound):
         self.start = start
@@ -57,7 +58,55 @@ class GridStep:
         point.append(row)
         return pd.DataFrame(point, columns=self.cols)
 
+    def Suround(self, x1, x2, y1, y2, d, bool):
+        if bool:
+            midp_x, midp_y = (x1 + x2) / 2, (y1 + y2) / 2
+        else:
+            midp_x, midp_y = x1, y1
 
+        slope = -(x2 - x1) / (y2 - y1)
+        const = midp_y - slope * midp_x
+        a, b = 1 + slope ** 2, -2 * (midp_x + slope * midp_y - const * slope)
+        c = const ** 2 + midp_x ** 2 + midp_y ** 2 - 2 * midp_y * const - d ** 2
+        disc = np.sqrt(b ** 2 - 4 * a * c)
+        solx = np.array([(- b + disc) / (2 * a), (- b - disc) / (2 * a)])
+        solx = solx.ravel()
+        if bool:
+            solx = np.append(solx, midp_x)
+        soly = slope * solx + const
+        return solx, soly
 
+    def GridRebuild(self, graph, num):
+        #make close extra points
+        point = []
+        graphmerg = pd.concat([graph, graph.shift(-1).add_prefix('next_')], axis=1)
+        d = self.dist / num
+        id = 0
+        band = 0
+        for row in graphmerg.iloc[:-1, :].itertuples():
+            #add row data
+            rowadd = [band, id, row[3], row[4]]
+            point.append(rowadd)
+            #surrounding points to x1, y1:
+            if id > 0:
+                sols = self.Suround(row[3], row[7], row[4], row[8], d, False)
+                for i, j in zip(sols[0], sols[1]):
+                    id += 1
+                    rowadd = [band, id, i, j]
+                    point.append(rowadd)
 
+            band += 1
+            #make intermediate points
+            sols = self.Suround(row[3], row[7], row[4], row[8], d, True)
+            for i, j in zip(sols[0], sols[1]):
+                id += 1
+                rowadd = [band, id, i, j]
+                point.append(rowadd)
+            band += 1
+            id += 1
+
+        lastrow = graph.iloc[-1, :]
+        rowadd = [band, id, lastrow['x'], lastrow['y']]
+        point.append(rowadd)
+        return pd.DataFrame(point, columns = self.cols)
 

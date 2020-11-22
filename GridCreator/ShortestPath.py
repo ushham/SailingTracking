@@ -8,8 +8,7 @@ class Shortpath:
     conv = 360 / (2 * np.pi)
     dircount = 360
 
-    def __init__(self, graph, polar, wind, res):
-        self.graph = graph
+    def __init__(self, polar, wind, res):
         self.sail = polar[0]
         self.polar = polar[1]
         self.wind = wind
@@ -26,7 +25,7 @@ class Shortpath:
             pol = inx
         return pol, y1, y2
 
-    def timetravel(self, p1, p2, row, orig):
+    def timetravel(self, p1, p2):
         dist = np.sqrt((p1[0] - p2[0]) ** 2 + (p1[1] - p2[1]) ** 2)
         if (p2[0] - p1[0]) == 0:
             theta = np.pi / 2 if (p2[1] - p1[1]) > 0 else 3 * np.pi / 2
@@ -63,10 +62,10 @@ class Shortpath:
             time = dist / speed if speed > 0 else np.inf
         return time, pol, [t_ab, t_w * self.conv, theta * self.conv], s_w
 
-    def Dijkstra(self):
+    def Dijkstra(self, graph, upper):
         #input graph, outputs pandas df with list of vertices and times for all points
         #make list of vertices with infinite distance
-        vertices = self.graph.shape[0]
+        vertices = graph.shape[0]
         dist = np.inf * np.ones(vertices)
         sail = np.zeros(vertices)
         pred = np.zeros(vertices)
@@ -84,13 +83,13 @@ class Shortpath:
             vert.remove(inx)
             #print(dist, inx)
 
-            band = self.graph.at[inx, 'Band']
-            x1, y1 = self.graph.at[inx, 'x'], self.graph.at[inx, 'y']
-            for row in self.graph[(self.graph['Band'] >= band) & (self.graph['Band'] <= band + 1)].itertuples():
+            band = graph.at[inx, 'Band']
+            x1, y1 = graph.at[inx, 'x'], graph.at[inx, 'y']
+            for row in graph[(graph['Band'] >= band) & (graph['Band'] <= band + upper)].itertuples():
                 id = row[2]
                 if id in vert:
                     x2, y2 = row[3], row[4]
-                    timesail = self.timetravel([x1, y1], [x2, y2], row, band)
+                    timesail = self.timetravel([x1, y1], [x2, y2])
                     md = dist[inx] + timesail[0]
                     if md < dist[id]:
                         sail[id] = timesail[1]
