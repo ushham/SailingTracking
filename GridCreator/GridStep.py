@@ -6,7 +6,7 @@ class GridStep:
     minSpacing = 11
     conv = 2 * np.pi / 360
     cols = ['Band', 'ID', 'x', 'y']
-    dist = np.array([0.1, 0.2, 0.3])
+    dist = np.array([0.1, 0.2, 0.3, 0.6, 1])
 
     def __init__(self, start, end, bound):
         self.start = start

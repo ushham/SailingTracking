@@ -16,7 +16,7 @@ polars = pol.Polars(loc).readfiles()
 #pp.polarplt(polars[1], [1])
 
 grdbuild = gs.GridStep(p.start, p.end, p.bound)
-grid = grdbuild.GraphBuild(1, 40, 50, 0.5)
+grid = grdbuild.GraphBuild(1, 60, 90, 0.5)
 
 x = grid['x'].to_numpy()
 y = grid['y'].to_numpy()
@@ -31,13 +31,13 @@ print("Total Time: " + str(sol[0][-1]))
 
 wv.WindVec(Wind.u, Wind.v, Wind.X, Wind.Y, x, y, path, sol[2][path], polars[0], False)
 regrid = grid
-for i in range(6):
+for i in range(10):
     regrid = grdbuild.GridRebuild(regrid.loc[path, :], 1)
 
     x = regrid['x'].to_numpy()
     y = regrid['y'].to_numpy()
     wv.WindVec(Wind.u, Wind.v, Wind.X, Wind.Y, x, y, [], [], [], True)
-    sol = vert.Dijkstra(regrid, i + 1)
+    sol = vert.Dijkstra(regrid, min(i + 1, 2))
     path = vert.Path(sol[1])
     print("Total Time: " + str(sol[0][-1]))
 
