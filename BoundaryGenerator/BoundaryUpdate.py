@@ -29,10 +29,16 @@ class PointUpdate:
         self.polar = np.array(polars[1])
         self.sails = polars[0]
 
+    def func(self, time):
+        #function to increase the number of points in boundary as time increases
+        t0 = 180
+        t10 = 360
+        return int((t10 - t0) * math.log(time, 10) + (t10 - t0))
+
     def winddata(self, data):
         #Retuns wind data at given location
-        x = int(data[3] // p.res[0])
-        y = int(data[4] // p.res[1])
+        x = int(data[0] // p.res[0])
+        y = int(data[1] // p.res[1])
 
         u, v = self.wind[0][y, x], self.wind[1][y, x]
         if v == 0:
@@ -94,13 +100,14 @@ class PointUpdate:
 
         #for loop to run through data
         for t in range(time, maxt, self.timestep):
+            print(t)
 
             dataprev = prevdata
             prevdata = []
             if count == 0:
                 #first iteration
                 #[id_col, prev_col, time_col, x_col, y_col, rad_col, the_o_col, speed_col, sail_col]
-                data = [count, count, t, self.ini_x, self.ini_y, 0, 0, 0, 'NA']
+                data = [count, count, t, self.ini_x, self.ini_y, 0, 0, 0, np.nan]
                 prevdata.append(data)
                 datahold.append(data)
                 count += 1
@@ -108,46 +115,13 @@ class PointUpdate:
             else:
                 dat = np.array(dataprev)
 
-                #radius and direction from origin
-                #r0, t0 = dat[:, 6].astype(float), dat[:, 5].astype(float)
-                for row in dataprev:
-                    if t == 1:
-                        #first time step, do full circle
-                        rg = np.linspace(0, self.dircount - 1, self.dircount)
-                    else:
-                        #only look for solutions +- certain angle from previous direction
-                        rg = np.linspace((row[5] - self.pm_angle), (row[5] + self.pm_angle), int(self.pm_angle / res))
-                        rg = rg % self.dircount
-
-                    for theta in rg:
-                        #true windspeed and direction
-                        ang, kts = self.winddata(row)
-
-                        #angle of boat to wind
-                        boat_angle = (ang - theta) % self.dircount
-
-                        #Find best polar and resulting boat speed given true wind
-                        pol, boat_speed = self.bestpolar(kts, boat_angle)
-                        dist = self.timestep * boat_speed
-
-                        #find new x and y location
-                        xloc, yloc = dist * np.cos(theta / self.conv) + row[3], dist * np.sin(theta / self.conv) + row[4]
-
-                        #direction of new point to orign
-                        the_ini = np.arctan((yloc - self.ini_y) / (xloc - self.ini_x)) * self.conv
-                        dist_ini = np.sqrt((xloc - self.ini_x) ** 2 + (yloc - self.ini_y) ** 2)
-
-                        #[id_col, prev_col, time_col, x_col, y_col, rad_col, the_o_col, speed_col, sail_col]
-                        data = [count, row[0], t, xloc, yloc, dist_ini, the_ini, boat_speed, self.sails[pol]]
-                        prevdata.append(data)
-                        count += 1
-
-                    #filter list so that only keep the best points
-                    prevdata = self.filt_data(prevdata, res)
-
+                for dir_angle in np.linspace(0, self.dircount, self.func(t)):
+                    prevdata.append(self.ReturnPoint(dir_angle, dat, t, count))
+                    count += 1
                 datahold.extend(prevdata)
 
-        return pd.DataFrame(datahold, columns = self.cols)
+        return pd.DataFrame(datahold, columns=self.cols)
+
 
     def Sailable(self, point1, point2, t_w, s_w):
         #Returns false if points can be reached in time
@@ -163,7 +137,8 @@ class PointUpdate:
         #wind relative to boat
         boat_ang = (t_w - theta) % self.dircount
         pol, speed = self.bestpolar(s_w, boat_ang)
-        return dist / speed > self.timestep, pol, speed
+        out = dist / speed > self.timestep if speed !=0 else False
+        return out, pol, speed
 
     def MaxDist(self, point1, mindist, angle):
         #finds the maximum distance from origin to point2 given point1
@@ -176,6 +151,7 @@ class PointUpdate:
         i = 0
         increase = True
         pol, speed = 0, 0
+        point2x, point2y = 0, 0
         if self.Sailable(point1, point2, t_w, s_w)[0]:
             while distdelta > 0.01 or i < 100:
                 i += 1
@@ -188,39 +164,33 @@ class PointUpdate:
                     dist = dist - distdelta
                     increase = False
 
-                point2 = [mindist * np.cos(angle), mindist * np.sin(angle)]
+                point2x, point2y = mindist * np.cos(angle), mindist * np.sin(angle)
 
                 if i > 1 and (previnc != increase):
                     distdelta = distdelta / 2
 
-        return dist, point2, pol, speed
+        return dist, point2x, point2y, pol, speed
 
     def ReturnPoint(self, angle, list, time, newid):
         #given list, return point
         #find min distance given angle
         #list consists of all points in previous layer
-        mindist = list[list[self.the_o_col >= angle] & list[self.the_o_col <= angle]].min(level=self.rad_col)
+        filtlist = list[(list[:, 6] >= angle - 1) & (list[:, 6] <= angle + 1)]
+        mindist = np.min(filtlist[:, 5]) if filtlist.shape[0] > 0 else 0
 
+        i = 0
         #run through set of points and find max distance
-        dist = np.zeros((list.shape[0], 4))
+        dist = np.zeros((list.shape[0], 5))
         ###### MAKE MORE EFFICINET BY NOT SEARCHING ALL POSSIBLE SOLUTIONS####
-        for index, row in list.iterrows():
-            point1 = [row[self.x_col], row[self.y_col]]
-            dist[index, :] = self.MaxDist(point1, mindist, angle)
+        for row in list:
+            point1 = [row[3], row[4]]
+            dist[i, :] = self.MaxDist(point1, mindist, angle)
+            i += 1
         id = np.argmax(dist[:, 0])
         #cols = [id_col, prev_col, time_col, x_col, y_col, rad_col, the_o_col, speed_col, sail_col]
-        point = [newid, list.iloc[id][self.prev_col], time, dist[id, 1][0], dist[id, 1][1], dist[id, 0], angle, dist[id, 2], dist[id, 3]]
+        point = [newid, list[id, 1], time, dist[id, 1], dist[id, 2], dist[id, 0], angle, dist[id, 3], dist[id, 4]]
 
         return point
-
-
-
-    def MaxPoint(self, maxt, res):
-        #works outward from previous boundary along line until it only has one point still connected
-
-
-    #re order code so that row is only appended to list if it is the max at that angle
-
 
 
 
