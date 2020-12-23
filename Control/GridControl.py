@@ -6,7 +6,6 @@ from Visualisation import PolarPlots as pp
 from GridCreator import GridStep as gs
 from Control import Parameters as p
 from BoundaryGenerator import PolarData as pol
-import matplotlib.pyplot as plt
 from GridCreator import ShortestPath as sp
 
 np.set_printoptions(precision=3, suppress=True)

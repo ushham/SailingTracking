@@ -1,8 +1,6 @@
 import numpy as np
-import pandas as pd
 import math
 from GridCreator import GridStep as gs
-
 
 class Shortpath:
     conv = 360 / (2 * np.pi)
@@ -14,8 +12,10 @@ class Shortpath:
         self.wind = wind
         self.res = res
 
-    def bestpolar(self, k, theta):
-        x1, x2 = math.floor(theta) % self.dircount, math.ceil(theta) % self.dircount
+    def bestpolar(self, k, angle):
+        # Returns best polar given wind data
+        # Checks number of polars availible for checks
+        x1, x2 = math.floor(angle) % self.dircount, math.ceil(angle) % self.dircount
         if len(self.polar.shape) == 2:
             y1, y2 = self.polar[x1, k], self.polar[x2, k]
             pol = 0
@@ -23,7 +23,18 @@ class Shortpath:
             inx = np.argmax(self.polar[:, x1, k])
             y1, y2 = self.polar[inx, x1, k], self.polar[inx, x2, k]
             pol = inx
-        return pol, y1, y2
+        else:
+            print('Error with polar data')
+            y1, y2 = 0, 0
+            pol = 0
+
+        # profprms a linear regression on two speeds given two angles
+        if x1 == x2 or y1 == y2:
+            boat_speed = y1
+        else:
+            coef = np.polyfit([x1, x2], [y1, y2], 1)
+            boat_speed = coef[0] * angle + coef[1]
+        return pol, boat_speed
 
     def timetravel(self, p1, p2):
         dist = np.sqrt((p1[0] - p2[0]) ** 2 + (p1[1] - p2[1]) ** 2)
@@ -51,14 +62,8 @@ class Shortpath:
             s_w = int(np.sqrt(u ** 2 + v ** 2))
             t_ab = (t_w - theta) * self.conv % self.dircount
 
-            pol, y1, y2 = self.bestpolar(s_w, t_ab)
-            x1, x2 = math.floor(t_ab), math.ceil(t_ab)
+            pol, speed = self.bestpolar(s_w, t_ab)
 
-            if x1 == x2:
-                speed = y1
-            else:
-                coef = np.polyfit([x1, x2], [y1, y2], 1)
-                speed = coef[0] * t_ab + coef[1]
             time = dist / speed if speed > 0 else np.inf
         return time, pol, [t_ab, t_w * self.conv, theta * self.conv], s_w
 
