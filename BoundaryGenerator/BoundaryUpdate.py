@@ -31,8 +31,8 @@ class PointUpdate:
 
     def func(self, time):
         #function to increase the number of points in boundary as time increases
-        t0 = 180
-        t10 = 360
+        t0 = 90
+        t10 = 180
         return int((t10 - t0) * math.log(time, 10) + (t10 - t0))
 
     def winddata(self, data):
@@ -78,19 +78,6 @@ class PointUpdate:
             boat_speed = coef[0] * angle + coef[1]
         return pol, boat_speed
 
-    def filt_data(self, list, res):
-        #filter data into even spacing by res
-        df = pd.DataFrame(list, columns=self.cols)
-
-        indexlist = []
-        for theta in range(0, self.dircount, res):
-            #filter data so only have values in allowed neighbourhood
-            dtfilt = df[(df[self.the_o_col] >= theta - self.pm_res) & (df[self.the_o_col] <= theta + self.pm_res)]
-            if dtfilt.shape[0] > 0:
-                indexlist.append(df.iloc[dtfilt[self.rad_col].idxmax()].tolist())
-
-        return indexlist
-
     def UpdatePoints(self, maxt, res):
         count = 0
         time = 0
@@ -116,6 +103,7 @@ class PointUpdate:
                 dat = np.array(dataprev)
 
                 for dir_angle in np.linspace(0, self.dircount, self.func(t)):
+                    print(dir_angle)
                     prevdata.append(self.ReturnPoint(dir_angle, dat, t, count))
                     count += 1
                 datahold.extend(prevdata)
@@ -126,6 +114,7 @@ class PointUpdate:
     def Sailable(self, point1, point2, t_w, s_w):
         #Returns false if points can be reached in time
         #find sailing angle
+
         if point2[0] - point1[0] == 0:
             theta = 0 if point2[1] >= point1[1] else np.pi
         else:
@@ -137,26 +126,28 @@ class PointUpdate:
         #wind relative to boat
         boat_ang = (t_w - theta) % self.dircount
         pol, speed = self.bestpolar(s_w, boat_ang)
-        out = dist / speed > self.timestep if speed !=0 else False
+        out = dist / speed < self.timestep if speed !=0 else False
+
+        out = True if dist == 0 else out
         return out, pol, speed
 
     def MaxDist(self, point1, mindist, angle):
         #finds the maximum distance from origin to point2 given point1
         angle = ((90 - angle) % self.dircount) / self.conv
-        point2 = [mindist * np.cos(angle), mindist * np.sin(angle)]
+        point2x, point2y = mindist * np.cos(angle), mindist * np.sin(angle)
         t_w, s_w = self.winddata(point1)
 
         dist = mindist
-        distdelta = 1
+        distdelta = 2
         i = 0
         increase = True
         pol, speed = 0, 0
-        point2x, point2y = 0, 0
-        if self.Sailable(point1, point2, t_w, s_w)[0]:
-            while distdelta > 0.01 or i < 100:
+        if self.Sailable(point1, [point2x, point2y], t_w, s_w)[0]:
+            while distdelta > 0.001 and i < 30:
                 i += 1
                 previnc = increase
-                bool, pol, speed = self.Sailable(point1, point2, t_w, s_w)
+                bool, pol, speed = self.Sailable(point1, [point2x, point2y], t_w, s_w)
+                #print(angle, i, distdelta, dist, self.Sailable(point1, [point2x, point2y], t_w, s_w))
                 if bool:
                     dist = dist + distdelta
                     increase = True
@@ -164,12 +155,13 @@ class PointUpdate:
                     dist = dist - distdelta
                     increase = False
 
-                point2x, point2y = mindist * np.cos(angle), mindist * np.sin(angle)
+                point2x, point2y = dist * np.cos(angle), dist * np.sin(angle)
+                #print(i, dist, distdelta, point2x, point2y, )
 
                 if i > 1 and (previnc != increase):
                     distdelta = distdelta / 2
 
-        return dist, point2x, point2y, pol, speed
+        return dist, point2x, point2y, speed, pol
 
     def ReturnPoint(self, angle, list, time, newid):
         #given list, return point
