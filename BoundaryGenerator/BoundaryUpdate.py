@@ -18,7 +18,7 @@ class PointUpdate:
     m2knts = 1.943844
     pm_angle = 90
     pm_res = 0.5
-    conv = 360 / 2 * np.pi
+    conv = 360 / (2 * np.pi)
     w_res = p.res
     cols = [id_col, prev_col, time_col, x_col, y_col, rad_col, the_o_col, speed_col, sail_col]
 
@@ -31,12 +31,13 @@ class PointUpdate:
 
     def func(self, time):
         #function to increase the number of points in boundary as time increases
-        t0 = 90
-        t10 = 180
+        t0 = 40
+        t10 = 360
         return int((t10 - t0) * math.log(time, 10) + (t10 - t0))
 
     def winddata(self, data):
         #Retuns wind data at given location
+        #converts direction to wind direction relative boat location
         x = int(data[0] // p.res[0])
         y = int(data[1] // p.res[1])
 
@@ -44,12 +45,12 @@ class PointUpdate:
         if v == 0:
             t_w = 0 if u < 0 else np.pi
         elif u == 0:
-            t_w = np.pi / 2 if v > 0 else 3 * np.pi / 2
+            t_w = np.pi / 2 if v < 0 else 3 * np.pi / 2
         else:
-            t_w = np.pi - np.arctan(v / u) if u > 0 else (2 * np.pi - np.arctan(v / u)) % (2 * np.pi)
+            t_w = np.pi - np.arctan(v / u) if u < 0 else (2 * np.pi - np.arctan(v / u)) % (2 * np.pi)
 
         s_w = int(np.sqrt(u ** 2 + v ** 2))
-
+        #print(u, v, s_w, t_w)
         return t_w, s_w
 
     def bestpolar(self, k, angle):
@@ -103,7 +104,6 @@ class PointUpdate:
                 dat = np.array(dataprev)
 
                 for dir_angle in np.linspace(0, self.dircount, self.func(t)):
-                    print(dir_angle)
                     prevdata.append(self.ReturnPoint(dir_angle, dat, t, count))
                     count += 1
                 datahold.extend(prevdata)
@@ -120,22 +120,23 @@ class PointUpdate:
         else:
             theta = np.arctan((point2[1] - point1[1]) / (point2[0] - point1[0]))
 
-        theta = (90 - theta * self.conv) % self.dircount
+        #theta = (90 - theta * self.conv) % self.dircount
+        theta = theta * self.conv if theta > 0 else (2 * np.pi + theta) * self.conv
         dist = math.sqrt((point2[0] - point1[0]) ** 2 + (point2[1] - point1[1]) ** 2)
 
         #wind relative to boat
-        boat_ang = (t_w - theta) % self.dircount
+        boat_ang = (t_w * self.conv - theta) % self.dircount
+        print(boat_ang, t_w * self.conv, theta, point1, point2)
         pol, speed = self.bestpolar(s_w, boat_ang)
         out = dist / speed < self.timestep if speed !=0 else False
 
         out = True if dist == 0 else out
         return out, pol, speed
 
-    def MaxDist(self, point1, mindist, angle):
+    def MaxDist(self, point1, mindist, angle, t_w, s_w):
         #finds the maximum distance from origin to point2 given point1
-        angle = ((90 - angle) % self.dircount) / self.conv
-        point2x, point2y = mindist * np.cos(angle), mindist * np.sin(angle)
-        t_w, s_w = self.winddata(point1)
+        ang = ((np.pi / 2 - angle) % (2 * np.pi))   #converts angle from math to compass angles
+        point2x, point2y = mindist * np.cos(ang) + self.ini_x, mindist * np.sin(ang) + self.ini_y
 
         dist = mindist
         distdelta = 2
@@ -154,8 +155,7 @@ class PointUpdate:
                 else:
                     dist = dist - distdelta
                     increase = False
-
-                point2x, point2y = dist * np.cos(angle), dist * np.sin(angle)
+                point2x, point2y = dist * np.cos(ang) + self.ini_x, dist * np.sin(ang) + self.ini_y
                 #print(i, dist, distdelta, point2x, point2y, )
 
                 if i > 1 and (previnc != increase):
@@ -176,13 +176,11 @@ class PointUpdate:
         ###### MAKE MORE EFFICINET BY NOT SEARCHING ALL POSSIBLE SOLUTIONS####
         for row in list:
             point1 = [row[3], row[4]]
-            dist[i, :] = self.MaxDist(point1, mindist, angle)
+            t_w, s_w = self.winddata(point1)
+            dist[i, :] = self.MaxDist(point1, mindist, angle / self.conv, t_w, s_w)
             i += 1
         id = np.argmax(dist[:, 0])
         #cols = [id_col, prev_col, time_col, x_col, y_col, rad_col, the_o_col, speed_col, sail_col]
-        point = [newid, list[id, 1], time, dist[id, 1], dist[id, 2], dist[id, 0], angle, dist[id, 3], dist[id, 4]]
+        point = [newid, list[id, 0], time, dist[id, 1], dist[id, 2], dist[id, 0], angle, dist[id, 3], dist[id, 4]]
 
         return point
-
-
-

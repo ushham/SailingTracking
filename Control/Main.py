@@ -9,8 +9,10 @@ import numpy as np
 loc = r'C:\Users\UKOGH001\Documents\05 Personal Projects\02 Vendee\02 Routing\Polars'
 
 polars = pol.Polars(loc).readfiles()
+#plt.polarplt(polars[1], 1)
 point = bu.PointUpdate(Wind.wind, polars, 5, 5)
-df = point.UpdatePoints(4, 5)
+df = point.UpdatePoints(2, 5)
+df.to_csv(r"C:\Users\UKOGH001\Downloads\outputs.csv")
 df1 = df[df['Time'] == 1]
 df2 = df[df['Time'] == 2]
 df3 = df[df['Time'] == 3]
