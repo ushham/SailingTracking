@@ -3,15 +3,15 @@ from BoundaryGenerator import PolarData as pol
 from Visualisation import PolarPlots as plt
 import matplotlib.pyplot as p
 from Control import Wind
-import numpy as np
+import time
 
-
+startt = time.time()
 loc = r'C:\Users\UKOGH001\Documents\05 Personal Projects\02 Vendee\02 Routing\Polars'
 
 polars = pol.Polars(loc).readfiles()
 #plt.polarplt(polars[1], 1)
 point = bu.PointUpdate(Wind.wind, polars, 5, 5)
-df = point.UpdatePoints(2, 5)
+df = point.UpdatePoints(5, 5)
 df.to_csv(r"C:\Users\UKOGH001\Downloads\outputs.csv")
 df1 = df[df['Time'] == 1]
 df2 = df[df['Time'] == 2]
@@ -27,10 +27,11 @@ x3 = df3['x_loc'].to_numpy()
 y3 = df3['y_loc'].to_numpy()
 
 print(df)
-
+print(time.time()-startt)
 #[id_col, prev_col, time_col, x_col, y_col, theta_col, rad_col, sail_col]
 
 p.scatter(x1, y1)
 p.scatter(x2, y2)
 p.scatter(x3, y3)
 p.show()
+

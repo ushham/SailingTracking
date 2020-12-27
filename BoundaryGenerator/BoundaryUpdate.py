@@ -32,7 +32,7 @@ class PointUpdate:
     def func(self, time):
         #function to increase the number of points in boundary as time increases
         t0 = 40
-        t10 = 360
+        t10 = 300
         return int((t10 - t0) * math.log(time, 10) + (t10 - t0))
 
     def winddata(self, data):
@@ -42,13 +42,7 @@ class PointUpdate:
         y = int(data[1] // p.res[1])
 
         u, v = self.wind[0][y, x], self.wind[1][y, x]
-        if v == 0:
-            t_w = 0 if u < 0 else np.pi
-        elif u == 0:
-            t_w = np.pi / 2 if v < 0 else 3 * np.pi / 2
-        else:
-            t_w = np.pi - np.arctan(v / u) if u < 0 else (2 * np.pi - np.arctan(v / u)) % (2 * np.pi)
-
+        t_w = 2 * np.pi - np.arctan2(v, u)
         s_w = int(np.sqrt(u ** 2 + v ** 2))
         #print(u, v, s_w, t_w)
         return t_w, s_w
@@ -104,6 +98,7 @@ class PointUpdate:
                 dat = np.array(dataprev)
 
                 for dir_angle in np.linspace(0, self.dircount, self.func(t)):
+                    #Find max dist from centre given previous points
                     prevdata.append(self.ReturnPoint(dir_angle, dat, t, count))
                     count += 1
                 datahold.extend(prevdata)
@@ -114,19 +109,14 @@ class PointUpdate:
     def Sailable(self, point1, point2, t_w, s_w):
         #Returns false if points can be reached in time
         #find sailing angle
+        theta = np.arctan2(point2[1] - point1[1], point2[0] - point1[0])
 
-        if point2[0] - point1[0] == 0:
-            theta = 0 if point2[1] >= point1[1] else np.pi
-        else:
-            theta = np.arctan((point2[1] - point1[1]) / (point2[0] - point1[0]))
-
-        #theta = (90 - theta * self.conv) % self.dircount
         theta = theta * self.conv if theta > 0 else (2 * np.pi + theta) * self.conv
         dist = math.sqrt((point2[0] - point1[0]) ** 2 + (point2[1] - point1[1]) ** 2)
 
         #wind relative to boat
-        boat_ang = (t_w * self.conv - theta) % self.dircount
-        print(boat_ang, t_w * self.conv, theta, point1, point2)
+        boat_ang = (theta - t_w * self.conv) % self.dircount
+
         pol, speed = self.bestpolar(s_w, boat_ang)
         out = dist / speed < self.timestep if speed !=0 else False
 
@@ -156,7 +146,6 @@ class PointUpdate:
                     dist = dist - distdelta
                     increase = False
                 point2x, point2y = dist * np.cos(ang) + self.ini_x, dist * np.sin(ang) + self.ini_y
-                #print(i, dist, distdelta, point2x, point2y, )
 
                 if i > 1 and (previnc != increase):
                     distdelta = distdelta / 2
@@ -170,15 +159,29 @@ class PointUpdate:
         filtlist = list[(list[:, 6] >= angle - 1) & (list[:, 6] <= angle + 1)]
         mindist = np.min(filtlist[:, 5]) if filtlist.shape[0] > 0 else 0
 
-        i = 0
         #run through set of points and find max distance
         dist = np.zeros((list.shape[0], 5))
-        ###### MAKE MORE EFFICINET BY NOT SEARCHING ALL POSSIBLE SOLUTIONS####
-        for row in list:
+        maxdist, id = 0, 0
+        #run through every n-th row, and then find closest for reinspection
+        n = 10
+        for row in list[0::n]:
+            point1 = [row[3], row[4]]
+            t_w, s_w = self.winddata(point1)
+            d = self.MaxDist(point1, mindist, angle / self.conv, t_w, s_w)[0]
+            if d > maxdist:
+                maxdist = d
+                id = row[0]
+
+        #filter array and re search points not run
+        filtlist = list[(list[:, 0] >= id - n) & (list[:, 0] <= id + n)]
+        i = 0
+        for row in filtlist:
             point1 = [row[3], row[4]]
             t_w, s_w = self.winddata(point1)
             dist[i, :] = self.MaxDist(point1, mindist, angle / self.conv, t_w, s_w)
             i += 1
+
+
         id = np.argmax(dist[:, 0])
         #cols = [id_col, prev_col, time_col, x_col, y_col, rad_col, the_o_col, speed_col, sail_col]
         point = [newid, list[id, 0], time, dist[id, 1], dist[id, 2], dist[id, 0], angle, dist[id, 3], dist[id, 4]]
